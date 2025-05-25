@@ -1,14 +1,7 @@
-from xmlrpc.server import SimpleXMLRPCServer
-server = SimpleXMLRPCServer(("localhost", 8000), logRequests=True)
-
-workers = {}
-
-def register_worker():
-    idx = len(workers)
-    workers[idx] = {
-        id: idx
-    }
-    return idx
+import asyncio 
+import grpc
+import mapreduce_pb2
+import mapreduce_pb2_grpc
 
 def chunker(num_lines=2000):
     try: 
@@ -22,24 +15,83 @@ def chunker(num_lines=2000):
     except Exception as e:
         print(f"Error: {e}")
 
-ptr = iter(chunker(1))
+async def map_worker(queue, port, worker_id):
+    async with grpc.aio.insecure_channel(f'localhost:{port}') as channel:
+        stub = mapreduce_pb2_grpc.MapReduceStub(channel)
+        while True:
+            chunk = await queue.get()
+            if chunk is None:
+                queue.task_done()
+                break 
+            try: 
+                await stub.Map(mapreduce_pb2.MapRequest(
+                    key=None,
+                    value=chunk,
+                    worker_id=worker_id
+                ))
+            except grpc.aio.AioRpcError as e:
+                print(f"welp: {e}")
+            finally:
+                queue.task_done()
+
+async def reduce_worker(port, worker_id):
+    async with grpc.aio.insecure_channel(f'localhost:{port}') as channel:
+        stub = mapreduce_pb2_grpc.MapReduceStub(channel)
+
+
+ptr = iter(chunker(3))
 def get_next_chunk():
     return next(ptr)
 
-if __name__ == '__main__':
-    print(repr(get_next_chunk()))
-    print(repr(get_next_chunk()))
+async def produce_chunks(queue):
+    while True:
+        try:
+            chunk = get_next_chunk()
+        except StopIteration:
+            break 
+        await queue.put(chunk)
 
-    coordinator_server = SimpleXMLRPCServer(("localhost", 8000), logRequests=True)
+    for _ in range(W):
+        await queue.put(None)
+
+async def main():
+    queue = asyncio.Queue(maxsize = 2 * W)
+    workers = []
+    for worker in worker_metadata:
+        workers.append(
+            asyncio.create_task(map_worker(
+                queue,
+                worker['port'],
+                worker['worker_id']
+            ))
+        )
+    await produce_chunks(queue)
+    await asyncio.gather(*workers)
+
+    workers = []
+    for worker in worker_metadata:
+
     
-    coordinator_server.register_function(register_worker, 'register_worker')
-    coordinator_server.register_function(get_next_chunk, 'get_next_chunk')
+if __name__ == '__main__':
+    global worker_metadata, W
 
-    coordinator_server.serve_forever()
+    worker_metadata = []
+    with open('worker_metadata.txt', 'r') as f:
+        for line in f.readlines():
+            port, worker_id = line.split(",")
+            port, worker_id = int(port), int(worker_id)
+            worker_metadata.append({
+                'port': port, 
+                'worker_id': worker_id
+            })
+
+    W = len(worker_metadata)
+    asyncio.run(main())
 
     # connect to each worker (how will I know who the workers are?? IP + port)
     # save any data for each worker (IP, port, idx, status)
     # now you have all workers.
+    
     # using RPC in coordinator, give each worker a chunk (get_next_chunk, pass into mapper_func)
     # when the worker finishes the chunk, the worker RPCs the coordinator to give the next chunk?
     # this process repeats until all chunks have been mapped.

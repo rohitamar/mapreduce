@@ -1,0 +1,17 @@
+syntax = "proto3";
+package mapreduce;
+import "google/protobuf/empty.proto";
+
+service MapReduce {
+    rpc Map(MapRequest) returns (google.protobuf.Empty) {}
+    rpc Reduce(ReduceRequest) returns (google.protobuf.Empty) {}
+}
+
+message MapRequest {
+    string    chunk = 1;     
+    int32 worker_id = 2;
+}
+
+message ReduceRequest {
+    repeated int32 worker_ids = 1;   
+}
