@@ -13,5 +13,6 @@ message MapRequest {
 }
 
 message ReduceRequest {
-    repeated int32 worker_ids = 1;   
+    repeated int32 worker_ids = 1;  
+    int32 worker_id = 2; 
 }
