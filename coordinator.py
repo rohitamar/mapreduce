@@ -3,6 +3,8 @@ import grpc
 import mapreduce_pb2
 import mapreduce_pb2_grpc
 
+
+
 def chunker(num_lines=2000):
     try: 
         with open('small.txt', 'r') as f:
@@ -23,21 +25,30 @@ async def map_worker(queue, port, worker_id):
             if chunk is None:
                 queue.task_done()
                 break 
+            print("ayo??")
             try: 
                 await stub.Map(mapreduce_pb2.MapRequest(
-                    key=None,
                     value=chunk,
+                    key=chunk,
                     worker_id=worker_id
                 ))
-            except grpc.aio.AioRpcError as e:
-                print(f"welp: {e}")
+            except Exception as e:
+                print(e)
             finally:
                 queue.task_done()
 
-async def reduce_worker(port, worker_id):
+async def reduce_worker(port, worker_ids, worker_id):
     async with grpc.aio.insecure_channel(f'localhost:{port}') as channel:
         stub = mapreduce_pb2_grpc.MapReduceStub(channel)
-
+        try:
+            print(worker_ids, type(worker_ids))
+            print(worker_id, type(worker_id))
+            await stub.Reduce(mapreduce_pb2.ReduceRequest(
+                worker_ids=worker_ids,
+                worker_id=worker_id
+            ))
+        except Exception as e:
+            print(e)
 
 ptr = iter(chunker(3))
 def get_next_chunk():
@@ -51,10 +62,8 @@ async def produce_chunks(queue):
             break 
         await queue.put(chunk)
 
-    for _ in range(W):
-        await queue.put(None)
-
 async def main():
+    # mapper phase
     queue = asyncio.Queue(maxsize = 2 * W)
     workers = []
     for worker in worker_metadata:
@@ -65,18 +74,35 @@ async def main():
                 worker['worker_id']
             ))
         )
+    
+    # chunk dataset
     await produce_chunks(queue)
+
+    # done consuming chunks, let workers know
+    for _ in range(W):
+        await queue.put(None)
+
     await asyncio.gather(*workers)
 
+    # reducer phase
+    worker_ids = [w['worker_id'] for w in worker_metadata]
     workers = []
     for worker in worker_metadata:
-
+        workers.append(
+            asyncio.create_task(reduce_worker(
+                worker['port'],
+                worker_ids,
+                worker['worker_id']
+            ))
+        )
+    
+    await asyncio.gather(*workers)
     
 if __name__ == '__main__':
     global worker_metadata, W
 
     worker_metadata = []
-    with open('worker_metadata.txt', 'r') as f:
+    with open('metadata.txt', 'r') as f:
         for line in f.readlines():
             port, worker_id = line.split(",")
             port, worker_id = int(port), int(worker_id)

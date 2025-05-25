@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fmapreduce.proto\x12\tmapreduce\x1a\x1bgoogle/protobuf/empty.proto\".\n\nMapRequest\x12\r\n\x05\x63hunk\x18\x01 \x01(\t\x12\x11\n\tworker_id\x18\x02 \x01(\x05\"#\n\rReduceRequest\x12\x12\n\nworker_ids\x18\x01 \x03(\x05\x32\x81\x01\n\tMapReduce\x12\x36\n\x03Map\x12\x15.mapreduce.MapRequest\x1a\x16.google.protobuf.Empty\"\x00\x12<\n\x06Reduce\x12\x18.mapreduce.ReduceRequest\x1a\x16.google.protobuf.Empty\"\x00\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fmapreduce.proto\x12\tmapreduce\x1a\x1bgoogle/protobuf/empty.proto\";\n\nMapRequest\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\x12\x11\n\tworker_id\x18\x03 \x01(\x05\"6\n\rReduceRequest\x12\x12\n\nworker_ids\x18\x01 \x03(\x05\x12\x11\n\tworker_id\x18\x02 \x01(\x05\x32\x81\x01\n\tMapReduce\x12\x36\n\x03Map\x12\x15.mapreduce.MapRequest\x1a\x16.google.protobuf.Empty\"\x00\x12<\n\x06Reduce\x12\x18.mapreduce.ReduceRequest\x1a\x16.google.protobuf.Empty\"\x00\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,9 +33,9 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'mapreduce_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_MAPREQUEST']._serialized_start=59
-  _globals['_MAPREQUEST']._serialized_end=105
-  _globals['_REDUCEREQUEST']._serialized_start=107
-  _globals['_REDUCEREQUEST']._serialized_end=142
-  _globals['_MAPREDUCE']._serialized_start=145
-  _globals['_MAPREDUCE']._serialized_end=274
+  _globals['_MAPREQUEST']._serialized_end=118
+  _globals['_REDUCEREQUEST']._serialized_start=120
+  _globals['_REDUCEREQUEST']._serialized_end=174
+  _globals['_MAPREDUCE']._serialized_start=177
+  _globals['_MAPREDUCE']._serialized_end=306
 # @@protoc_insertion_point(module_scope)

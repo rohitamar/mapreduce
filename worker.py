@@ -16,8 +16,13 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
         worker_id = request.worker_id
         value = request.value
         try:
-            files = [open(f"./dump/map-{worker_id}-spill-{i}") for i in range(R)]
+            files = [
+                open(f"./dump/map-{worker_id}-spill-{i}", 'a') 
+                for i in range(R)
+            ]
             for word in value.split(" "):
+                if not word:
+                    continue 
                 hsh = hash(word) % R 
                 files[hsh].write(f"{word}\t1\n")
         except IOError as e:
@@ -53,8 +58,10 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
         with open(f'./output/reducer-{request.worker_id}', 'w') as f:
             for key, group in reducer_input:
                 word_count = sum(count for _, count in group)
+                print(key, word_count)
                 f.write(f"{key} {word_count}\n")
         stack.close()
+        return empty_pb2.Empty()
 
 async def serve(port):
     server = grpc.aio.server()

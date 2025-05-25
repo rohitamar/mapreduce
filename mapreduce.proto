@@ -8,8 +8,9 @@ service MapReduce {
 }
 
 message MapRequest {
-    string    chunk = 1;     
-    int32 worker_id = 2;
+    string    key        = 1;  
+    string    value      = 2;   
+    int32     worker_id  = 3;
 }
 
 message ReduceRequest {
