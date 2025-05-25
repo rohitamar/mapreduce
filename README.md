@@ -1,2 +1,3 @@
 # mapreduce
-Mapreduce in Python
+
+Implementing Google's MapReduce using gRPC and asyncio
