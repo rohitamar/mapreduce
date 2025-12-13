@@ -23,5 +23,3 @@ for i, f in enumerate(listdir(reducer_path)):
         continue 
     reducer_files.append(map(parse, open(nf, 'r')))
     print(f"Reducer file {i + 1}: {nf}")
-
-while any()

@@ -3,8 +3,6 @@ import grpc
 import mapreduce_pb2
 import mapreduce_pb2_grpc
 
-
-
 def chunker(num_lines=2000):
     try: 
         with open('small.txt', 'r') as f:
@@ -25,12 +23,12 @@ async def map_worker(queue, port, worker_id):
             if chunk is None:
                 queue.task_done()
                 break 
-            print("ayo??")
             try: 
                 await stub.Map(mapreduce_pb2.MapRequest(
                     value=chunk,
                     key=chunk,
-                    worker_id=worker_id
+                    worker_id=worker_id,
+                    num_workers=W
                 ))
             except Exception as e:
                 print(e)
@@ -41,8 +39,6 @@ async def reduce_worker(port, worker_ids, worker_id):
     async with grpc.aio.insecure_channel(f'localhost:{port}') as channel:
         stub = mapreduce_pb2_grpc.MapReduceStub(channel)
         try:
-            print(worker_ids, type(worker_ids))
-            print(worker_id, type(worker_id))
             await stub.Reduce(mapreduce_pb2.ReduceRequest(
                 worker_ids=worker_ids,
                 worker_id=worker_id
