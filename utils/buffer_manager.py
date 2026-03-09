@@ -30,6 +30,7 @@ class BufferManager:
             bucket = self.partitioner.get_bucket(key_str)
             
             self.buffer[bucket].append((key_str, value))
+            
             # f"{key_str}\t{value}\n" --> len(key_str) + len(value) + 2 (\t and \n)
             self.buffered_bytes += len(key_str.encode("utf-8")) + len(str(value).encode("utf-8")) + 2
 

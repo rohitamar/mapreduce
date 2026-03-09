@@ -9,9 +9,9 @@ import sys
 
 from google.protobuf import empty_pb2
 from contextlib import ExitStack
-from BufferManager import BufferManager
-from jobs import JobFactory
-from partitioners import PartitionerFactory
+from utils.buffer_manager import BufferManager
+from utils.jobs import JobFactory
+from utils.partitioners import PartitionerFactory
 
 class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
     
@@ -24,6 +24,12 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
 
     def set_server(self, server):
         self.server = server
+
+    async def _shutdown_server(self):
+        # Let the EndPhase response flush before beginning graceful shutdown.
+        await asyncio.sleep(0)
+        if self.server is not None:
+            await self.server.stop(1)
 
     def configure(self, job_name, partitioner_name):
         if self.job_name == job_name and self.partitioner_name == partitioner_name:
@@ -161,7 +167,7 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
 
     async def EndPhase(self, request, context):
         if self.server is not None:
-            asyncio.create_task(self.server.stop(0))
+            asyncio.create_task(self._shutdown_server())
         return empty_pb2.Empty()
 
 async def serve(port):

@@ -1,7 +1,7 @@
 import re
 from collections import Counter
 
-from MapReduceJob import MapReduceJob
+from utils.map_reduce_job import MapReduceJob
 
 class WordCounterJob(MapReduceJob):
     name = "word_count"
