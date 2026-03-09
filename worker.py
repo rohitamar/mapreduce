@@ -57,7 +57,7 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
                 ),
                 serializer=self.job.serialize_intermediate,
                 dump_dir="./dump",
-                buffer_threshold_bytes=16 * 1024 * 1024 # 192 KB
+                buffer_threshold_bytes=16 * 1024 * 1024
             )
 
         try:
@@ -73,7 +73,7 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
 
                 self.buffer_manager.write_pairs(
                     self.job.combine(
-                        self.job.map(request.map_task_id, input_value)
+                        self.job.map(input_file, input_value)
                     )
                 )
 
