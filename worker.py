@@ -25,12 +25,6 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
     def set_server(self, server):
         self.server = server
 
-    async def _shutdown_server(self):
-        # Let the EndPhase response flush before beginning graceful shutdown.
-        await asyncio.sleep(0)
-        if self.server is not None:
-            await self.server.stop(1)
-
     def configure(self, job_name, partitioner_name):
         if self.job_name == job_name and self.partitioner_name == partitioner_name:
             return
@@ -164,6 +158,11 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
 
         stack.close()
         return empty_pb2.Empty()
+
+    async def _shutdown_server(self):
+        await asyncio.sleep(0)
+        if self.server is not None:
+            await self.server.stop(1)
 
     async def EndPhase(self, request, context):
         if self.server is not None:
