@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Simplified implementation of [Mapreduce](https://static.googleusercontent.com/media/research.google.com/en//archive/mapreduce-osdi04.pdf) in Python. 
+Simplified implementation of [Mapreduce](https://static.googleusercontent.com/media/research.google.com/en//archive/mapreduce-osdi04.pdf) in Python. Repository is for the word frequency task, but is meant to be easily changed for other tasks that follow the mapreduce pattern.
 
 ## Usage
 
