@@ -10,7 +10,7 @@ from google.protobuf import empty_pb2
 
 DATASET_PATH = "./dataset"
 
-def chunker(chunk_size= 8*1024*1024):                                                                                                                                                      
+def chunker(chunk_size=16*1024*1024):                                                                                                                                                      
     map_task_id = 0
     for name in os.listdir(DATASET_PATH):                                                                                                                                                                      
         file_path = os.path.join(DATASET_PATH, name)                                                                                                                                                           

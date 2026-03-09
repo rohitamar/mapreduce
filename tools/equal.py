@@ -1,6 +1,5 @@
 import sys
 
-
 def main():
     first = "final-output/answer.txt"
     second = "final-output/merged.txt"

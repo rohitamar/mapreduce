@@ -21,16 +21,11 @@ class SHA256Partitioner(Partitioner):
         big_int = int.from_bytes(digest, byteorder="big")
         return big_int % self.num_buckets
 
-PARTITIONER_REGISTRY = {
-    CRC32Partitioner.name: CRC32Partitioner,
-    SHA256Partitioner.name: SHA256Partitioner,
-}
-
-def build_partitioner(name, num_buckets):
-    try:
-        return PARTITIONER_REGISTRY[name](num_buckets)
-    except KeyError as exc:
-        available = ", ".join(sorted(PARTITIONER_REGISTRY))
-        raise ValueError(
-            f"Unknown partitioner '{name}'. Available partitioners: {available}"
-        ) from exc
+class PartitionerFactory:
+    @staticmethod 
+    def create(partitioner_type: str, num_buckets: int) -> Partitioner:
+        if partitioner_type == "crc32":
+            return CRC32Partitioner(num_buckets)
+        elif partitioner_type == "sha256":
+            return SHA256Partitioner(num_buckets)
+        raise ValueError(f"Unknown partitioner_type: {partitioner_type}")

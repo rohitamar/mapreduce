@@ -10,8 +10,8 @@ import sys
 from google.protobuf import empty_pb2
 from contextlib import ExitStack
 from BufferManager import BufferManager
-from jobs import get_job
-from partitioners import build_partitioner
+from jobs import JobFactory
+from partitioners import PartitionerFactory
 
 class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
     
@@ -34,7 +34,7 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
                 "Cannot change job or partitioner while a map phase is still active"
             )
 
-        self.job = get_job(job_name)
+        self.job = JobFactory.create(job_name)
         self.job_name = job_name
         self.partitioner_name = partitioner_name
 
@@ -51,12 +51,13 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
             self.buffer_manager = BufferManager(
                 worker_id=assigned_worker_id, 
                 num_buckets=num_reduce_partitions,
-                partitioner=build_partitioner(
+                partitioner=PartitionerFactory.create(
                     self.partitioner_name,
                     num_reduce_partitions,
                 ),
+                serializer=self.job.serialize_intermediate,
                 dump_dir="./dump",
-                buffer_threshold_bytes=192 * 1024 # 192 KB
+                buffer_threshold_bytes=16 * 1024 * 1024 # 192 KB
             )
 
         try:
@@ -73,8 +74,7 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
                 self.buffer_manager.write_pairs(
                     self.job.combine(
                         self.job.map(request.map_task_id, input_value)
-                    ),
-                    self.job.serialize_intermediate,
+                    )
                 )
 
         except IOError as e:

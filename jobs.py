@@ -68,15 +68,9 @@ class WordCounterJob(MapReduceJob):
     def format_output(self, key, value):
         return f"{key} {value}\n"
 
-JOB_REGISTRY = {
-    WordCounterJob.name: WordCounterJob,
-}
-
-def get_job(job_name):
-    try:
-        return JOB_REGISTRY[job_name]()
-    except KeyError as exc:
-        available_jobs = ", ".join(sorted(JOB_REGISTRY))
-        raise ValueError(
-            f"Unknown job '{job_name}'. Available jobs: {available_jobs}"
-        ) from exc
+class JobFactory:
+    @staticmethod 
+    def create(job_type: str) -> MapReduceJob:
+        if job_type == "word_count":
+            return WordCounterJob()
+        raise ValueError(f"Unknown job_type: {job_type}")

@@ -1,3 +1,4 @@
+import argparse
 import os
 import re
 import time
@@ -15,7 +16,7 @@ def process_file_chunk(file_paths):
             print(f"Error reading {path}: {e}")
     return local_counts
 
-def main():
+def main(num_processes: int) -> None:
     start = time.perf_counter()
 
     all_files = []
@@ -23,8 +24,6 @@ def main():
         for name in files:
             all_files.append(os.path.join(root, name))
     all_files.sort()
-
-    num_processes = 4
 
     chunk_size = len(all_files) // num_processes
     chunks = [all_files[i:i + chunk_size] for i in range(0, len(all_files), chunk_size)]
@@ -45,4 +44,13 @@ def main():
     print(f"Time taken for multiprocess.py ({num_processes} procs): {end:.4f} s")
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--num",
+        dest="num_processes",
+        type=int,
+        default=2,
+        help="Number of worker processes to use.",
+    )
+    args = parser.parse_args()
+    main(args.num_processes)
