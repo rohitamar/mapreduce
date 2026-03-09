@@ -4,7 +4,9 @@ import "google/protobuf/empty.proto";
 
 service MapReduce {
     rpc Map(MapRequest) returns (google.protobuf.Empty) {}
+    rpc FinalizeMap(google.protobuf.Empty) returns (google.protobuf.Empty) {}
     rpc Reduce(ReduceRequest) returns (google.protobuf.Empty) {}
+    rpc EndPhase(google.protobuf.Empty) returns (google.protobuf.Empty) {}
 }
 
 message MapRequest {

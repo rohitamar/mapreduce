@@ -1,2 +1,10 @@
 __pycache__
 .env
+
+# codex
+AGENTS.md
+
+# data sources
+dataset/
+dump/
+output/

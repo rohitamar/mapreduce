@@ -1,32 +1,42 @@
 import asyncio 
 import grpc
+import os
 import mapreduce_pb2
 import mapreduce_pb2_grpc
 
-def chunker(num_lines=2000):
-    try: 
-        with open('small.txt', 'r') as f:
-            chunk = []
-            for line in f:
-                chunk.append(line.strip())
-                if len(chunk) == num_lines:
-                    yield ' '.join(chunk)
-                    chunk = []
-    except Exception as e:
-        print(f"Error: {e}")
+from google.protobuf import empty_pb2
+
+DATASET_PATH = "./dataset"
+
+def chunker(chunk_size=64 * 1024):                                                                                                                                                      
+    for name in os.listdir(DATASET_PATH):                                                                                                                                                                      
+        file_path = os.path.join(DATASET_PATH, name)                                                                                                                                                           
+        if not os.path.isfile(file_path):                                                                                                                                                                     
+            continue                                                                                                                                                                                          
+                                                                                                                                                                                                            
+        try:                                                                                                                                                                                                  
+            file_size = os.path.getsize(file_path)                                                                                                                                                            
+            start = 0                                                                                                                                                                                         
+            while start < file_size:                                                                                                                                                                          
+                end = min(start + chunk_size, file_size)                                                                                                                                                      
+                yield (file_path, start, end)                                                                                                                                                                 
+                start = end                                                                                                                                                                                   
+        except Exception as e:                                                                                                                                                                                
+            print(f"Error with {file_path}: {e}") 
 
 async def map_worker(queue, port, worker_id):
     async with grpc.aio.insecure_channel(f'localhost:{port}') as channel:
         stub = mapreduce_pb2_grpc.MapReduceStub(channel)
         while True:
-            chunk = await queue.get()
-            if chunk is None:
+            byte_range = await queue.get()
+            if byte_range is None:
                 queue.task_done()
                 break 
+            start, end = byte_range
             try: 
                 await stub.Map(mapreduce_pb2.MapRequest(
-                    value=chunk,
-                    key=chunk,
+                    key=f"{start}:{end}",
+                    value='small.txt',
                     worker_id=worker_id,
                     num_workers=W
                 ))
@@ -34,6 +44,14 @@ async def map_worker(queue, port, worker_id):
                 print(e)
             finally:
                 queue.task_done()
+
+async def finalize_map_worker(port):
+    async with grpc.aio.insecure_channel(f'localhost:{port}') as channel:
+        stub = mapreduce_pb2_grpc.MapReduceStub(channel)
+        try:
+            await stub.FinalizeMap(empty_pb2.Empty())
+        except Exception as e:
+            print(e)
 
 async def reduce_worker(port, worker_ids, worker_id):
     async with grpc.aio.insecure_channel(f'localhost:{port}') as channel:
@@ -46,7 +64,15 @@ async def reduce_worker(port, worker_ids, worker_id):
         except Exception as e:
             print(e)
 
-ptr = iter(chunker(3))
+async def end_phase_worker(port):
+    async with grpc.aio.insecure_channel(f'localhost:{port}') as channel:
+        stub = mapreduce_pb2_grpc.MapReduceStub(channel)
+        try:
+            await stub.EndPhase(empty_pb2.Empty())
+        except Exception as e:
+            print(e)
+
+ptr = iter(chunker())
 def get_next_chunk():
     return next(ptr)
 
@@ -80,6 +106,14 @@ async def main():
 
     await asyncio.gather(*workers)
 
+    workers = []
+    for worker in worker_metadata:
+        workers.append(
+            asyncio.create_task(finalize_map_worker(worker['port']))
+        )
+
+    await asyncio.gather(*workers)
+
     # reducer phase
     worker_ids = [w['worker_id'] for w in worker_metadata]
     workers = []
@@ -92,6 +126,14 @@ async def main():
             ))
         )
     
+    await asyncio.gather(*workers)
+
+    workers = []
+    for worker in worker_metadata:
+        workers.append(
+            asyncio.create_task(end_phase_worker(worker['port']))
+        )
+
     await asyncio.gather(*workers)
     
 if __name__ == '__main__':
@@ -109,15 +151,3 @@ if __name__ == '__main__':
 
     W = len(worker_metadata)
     asyncio.run(main())
-
-    # connect to each worker (how will I know who the workers are?? IP + port)
-    # save any data for each worker (IP, port, idx, status)
-    # now you have all workers.
-    
-    # using RPC in coordinator, give each worker a chunk (get_next_chunk, pass into mapper_func)
-    # when the worker finishes the chunk, the worker RPCs the coordinator to give the next chunk?
-    # this process repeats until all chunks have been mapped.
-
-    # note that each worker is writing to /dump/map-{worker_id}-spill-i (where 0 <= i <= R)
-    # after this, we need to do the shuffle + sort phase.
-
