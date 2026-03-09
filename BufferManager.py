@@ -1,4 +1,3 @@
-import hashlib
 import os
 
 class BufferManager:
@@ -6,11 +5,13 @@ class BufferManager:
         self,
         worker_id,
         num_buckets,
+        partitioner,
         dump_dir="./dump",
         buffer_threshold_bytes=64 * 1024 * 1024,
     ):
         self.worker_id = worker_id
         self.num_buckets = num_buckets
+        self.partitioner = partitioner
         self.dump_dir = dump_dir
 
         self.buffer_threshold_bytes = buffer_threshold_bytes
@@ -21,15 +22,10 @@ class BufferManager:
 
         os.makedirs(self.dump_dir, exist_ok=True)
     
-    def _sha_to_bucket(self, key):
-        digest = hashlib.sha256(key.encode("utf-8")).digest()
-        big_int = int.from_bytes(digest, byteorder="big")
-        return big_int % self.num_buckets
-    
     def write_pairs(self, pairs, serializer):
         for key, value in pairs:
             key_str = str(key)
-            bucket = self._sha_to_bucket(key_str)
+            bucket = self.partitioner.get_bucket(key_str)
             line = serializer(key_str, value)
             
             self.buffer[bucket].append(line)

@@ -11,18 +11,36 @@ from google.protobuf import empty_pb2
 from contextlib import ExitStack
 from BufferManager import BufferManager
 from jobs import get_job
+from partitioners import build_partitioner
 
 class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
     
-    def __init__(self, job_name):
+    def __init__(self):
         self.buffer_manager = None
-        self.job = get_job(job_name)
+        self.job = None
+        self.job_name = None
+        self.partitioner_name = None
         self.server = None
 
     def set_server(self, server):
         self.server = server
 
+    def configure_runtime(self, job_name, partitioner_name):
+        if self.job_name == job_name and self.partitioner_name == partitioner_name:
+            return
+
+        if self.buffer_manager is not None:
+            raise RuntimeError(
+                "Cannot change job or partitioner while a map phase is still active"
+            )
+
+        self.job = get_job(job_name)
+        self.job_name = job_name
+        self.partitioner_name = partitioner_name
+
     async def Map(self, request, context):
+        self.configure_runtime(request.job_name, request.partitioner_name)
+
         assigned_worker_id = request.assigned_worker_id
         input_file = request.input_path
         byte_start = request.byte_start
@@ -33,6 +51,10 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
             self.buffer_manager = BufferManager(
                 worker_id=assigned_worker_id, 
                 num_buckets=num_reduce_partitions,
+                partitioner=build_partitioner(
+                    self.partitioner_name,
+                    num_reduce_partitions,
+                ),
                 dump_dir="./dump",
                 buffer_threshold_bytes=192 * 1024 # 192 KB
             )
@@ -49,7 +71,9 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
                 )
 
                 self.buffer_manager.write_pairs(
-                    self.job.map(request.map_task_id, input_value),
+                    self.job.combine(
+                        self.job.map(request.map_task_id, input_value)
+                    ),
                     self.job.serialize_intermediate,
                 )
 
@@ -118,6 +142,8 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
         return grouped, stack
 
     async def Reduce(self, request, context):
+        self.configure_runtime(request.job_name, request.partitioner_name)
+
         reducer_input, stack = self.shuffle_and_sort(
             request.reduce_partition_id,
             request.mapper_worker_ids,
@@ -138,20 +164,19 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
             asyncio.create_task(self.server.stop(0))
         return empty_pb2.Empty()
 
-async def serve(port, job_name):
+async def serve(port):
     server = grpc.aio.server()
-    servicer = MapReduceServicer(job_name)
+    servicer = MapReduceServicer()
     servicer.set_server(server)
     mapreduce_pb2_grpc.add_MapReduceServicer_to_server(servicer, server)
     server.add_insecure_port(f'[::]:{port}')
     await server.start() 
-    print(f"Server starting on {port} with job '{job_name}'")
+    print(f"Server starting on {port}")
     await server.wait_for_termination()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("port", type=int)
-    parser.add_argument("--job", default="word_count")
     args = parser.parse_args(sys.argv[1:])
-    asyncio.run(serve(args.port, args.job))
+    asyncio.run(serve(args.port))
     

@@ -1,3 +1,4 @@
+import argparse
 import asyncio 
 import grpc
 import os
@@ -48,6 +49,8 @@ async def map_worker(queue, port, worker_id):
                     byte_end=byte_range["byte_end"],
                     assigned_worker_id=worker_id,
                     num_reduce_partitions=NUM_REDUCE_PARTITIONS,
+                    job_name=JOB_NAME,
+                    partitioner_name=PARTITIONER_NAME,
                 ))
             except Exception as e:
                 print(e)
@@ -70,6 +73,8 @@ async def reduce_worker(port, mapper_worker_ids, assigned_worker_id, reduce_part
                 mapper_worker_ids=mapper_worker_ids,
                 assigned_worker_id=assigned_worker_id,
                 reduce_partition_id=reduce_partition_id,
+                job_name=JOB_NAME,
+                partitioner_name=PARTITIONER_NAME,
             ))
         except Exception as e:
             print(e)
@@ -153,7 +158,15 @@ async def main():
     print(f"MapReduce job completed in {elapsed_time:.2f} seconds")
     
 if __name__ == '__main__':
-    global worker_metadata, W, NUM_REDUCE_PARTITIONS
+    global JOB_NAME, PARTITIONER_NAME, worker_metadata, W, NUM_REDUCE_PARTITIONS
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--job", default="word_count")
+    parser.add_argument("--partitioner", default="crc32")
+    args = parser.parse_args()
+
+    JOB_NAME = args.job
+    PARTITIONER_NAME = args.partitioner
 
     worker_metadata = []
     with open('metadata.txt', 'r') as f:

@@ -12,6 +12,9 @@ class MapReduceJob(ABC):
     def map(self, map_task_id, input_value):
         raise NotImplementedError
 
+    def combine(self, pairs):
+        return pairs
+
     @abstractmethod
     def reduce(self, key, values):
         raise NotImplementedError

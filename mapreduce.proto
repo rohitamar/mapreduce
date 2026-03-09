@@ -16,10 +16,14 @@ message MapRequest {
     int64     byte_end               = 4;
     int32     assigned_worker_id     = 5;
     int32     num_reduce_partitions  = 6;
+    string    job_name               = 7;
+    string    partitioner_name       = 8;
 }
 
 message ReduceRequest {
     repeated int32 mapper_worker_ids = 1;
     int32 assigned_worker_id = 2;
     int32 reduce_partition_id = 3;
+    string job_name = 4;
+    string partitioner_name = 5;
 }

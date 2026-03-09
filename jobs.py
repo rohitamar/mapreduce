@@ -1,7 +1,7 @@
 import re
+from collections import Counter
 
 from MapReduceJob import MapReduceJob
-
 
 class WordCounterJob(MapReduceJob):
     name = "word_count"
@@ -47,6 +47,14 @@ class WordCounterJob(MapReduceJob):
         for word in re.finditer(r"\b\w+\b", input_value.lower()):
             yield word.group(), 1
 
+    def combine(self, pairs):
+        counts = Counter()
+        for key, value in pairs:
+            counts[key] += value
+
+        for key, value in counts.items():
+            yield key, value
+
     def reduce(self, key, values):
         return key, sum(values)
 
@@ -60,11 +68,9 @@ class WordCounterJob(MapReduceJob):
     def format_output(self, key, value):
         return f"{key} {value}\n"
 
-
 JOB_REGISTRY = {
     WordCounterJob.name: WordCounterJob,
 }
-
 
 def get_job(job_name):
     try:
