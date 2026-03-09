@@ -3,12 +3,12 @@ import argparse
 import heapq
 import itertools
 import grpc 
-import mapreduce_pb2_grpc
 import os 
 import sys 
 
 from google.protobuf import empty_pb2
 from contextlib import ExitStack
+from proto import mapreduce_pb2_grpc
 from utils.buffer_manager import BufferManager
 from utils.jobs import JobFactory
 from utils.partitioners import PartitionerFactory

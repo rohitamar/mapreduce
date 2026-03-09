@@ -1,7 +1,7 @@
 PORT := $(word 2,$(MAKECMDGOALS))
 
 proto: 
-	python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. mapreduce.proto
+	python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/mapreduce.proto
 
 make del:
 	del /q dump\* output\* final-output\* output\*

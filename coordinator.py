@@ -5,8 +5,8 @@ import os
 import shutil
 import time
 
-import mapreduce_pb2
-import mapreduce_pb2_grpc
+from proto import mapreduce_pb2
+from proto import mapreduce_pb2_grpc
 
 from google.protobuf import empty_pb2
 
