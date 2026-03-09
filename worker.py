@@ -25,7 +25,7 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
     def set_server(self, server):
         self.server = server
 
-    def configure_runtime(self, job_name, partitioner_name):
+    def configure(self, job_name, partitioner_name):
         if self.job_name == job_name and self.partitioner_name == partitioner_name:
             return
 
@@ -39,7 +39,7 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
         self.partitioner_name = partitioner_name
 
     async def Map(self, request, context):
-        self.configure_runtime(request.job_name, request.partitioner_name)
+        self.configure(request.job_name, request.partitioner_name)
 
         assigned_worker_id = request.assigned_worker_id
         input_file = request.input_path
@@ -142,7 +142,7 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
         return grouped, stack
 
     async def Reduce(self, request, context):
-        self.configure_runtime(request.job_name, request.partitioner_name)
+        self.configure(request.job_name, request.partitioner_name)
 
         reducer_input, stack = self.shuffle_and_sort(
             request.reduce_partition_id,
