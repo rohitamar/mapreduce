@@ -13,3 +13,7 @@ Then, run `make merge`. To verify, run `make single` and `make eq`.
 ## Results
 
 ![docker desktop results logs](https://github.com/rohitamar/mapreduce/blob/main/img/logs.png)
+
+## Future
+
+Currently, the docker instances assume the existence of a shared folder (./dump, ./output, ./dataset). An improvement, while following the pattern suggested in the paper, would have these folders in a NFS, and each docker node is communicating with the NFS. 
