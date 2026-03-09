@@ -148,7 +148,7 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
             request.reduce_partition_id,
             request.mapper_worker_ids,
         )
-        with open(f'./output/reducer-{request.reduce_partition_id}', 'w') as f:
+        with open(f'./output/reducer-{request.reduce_partition_id}', 'w', encoding='utf-8') as f:
             for key, group in reducer_input:
                 _, reduced_value = self.job.reduce(
                     key,

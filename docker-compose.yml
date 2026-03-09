@@ -1,0 +1,44 @@
+services:
+  worker0:
+    build: .
+    command: python -u worker.py 50051
+    working_dir: /app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1', 50051), 2); s.close()"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 2s
+    volumes:
+      - ./dataset:/app/dataset:ro
+      - ./dump:/app/dump
+      - ./output:/app/output
+
+  worker1:
+    build: .
+    command: python -u worker.py 50051
+    working_dir: /app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1', 50051), 2); s.close()"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 2s
+    volumes:
+      - ./dataset:/app/dataset:ro
+      - ./dump:/app/dump
+      - ./output:/app/output
+
+  coordinator:
+    build: .
+    command: python -u coordinator.py --workers 2
+    working_dir: /app
+    depends_on:
+      worker0:
+        condition: service_healthy
+      worker1:
+        condition: service_healthy
+    volumes:
+      - ./dataset:/app/dataset:ro
+      - ./dump:/app/dump
+      - ./output:/app/output

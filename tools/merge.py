@@ -18,7 +18,7 @@ def iter_output_file(file_handle):
             yield parse_output_line(line)
 
 def open_output_file(path):
-    return open(path, "r", encoding="cp1252")
+    return open(path, "r", encoding="utf-8")
 
 def clear_directory(directory):
     if not os.path.exists(directory):
@@ -46,6 +46,7 @@ def merge_outputs():
     with tempfile.NamedTemporaryFile(
         mode="w",
         encoding="utf-8",
+        newline="\r\n",
         delete=False,
         dir=tempfile.gettempdir(),
     ) as temp_output:
