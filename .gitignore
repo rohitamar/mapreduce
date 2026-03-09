@@ -8,3 +8,5 @@ AGENTS.md
 dataset/
 dump/
 output/
+final-output/
+.venv

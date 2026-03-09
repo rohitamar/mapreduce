@@ -100,6 +100,12 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
 
         for bucket in range(num_buckets):
             final_file = f"./dump/map-{worker_id}-spill-{bucket}"
+            if num_runs == 1:
+                run_file = f"./dump/map-{worker_id}-spill-{bucket}-run-0"
+                if os.path.exists(run_file):
+                    os.replace(run_file, final_file)
+                continue
+
             with ExitStack() as stack:
                 sorted_runs = []
                 for run_idx in range(num_runs):

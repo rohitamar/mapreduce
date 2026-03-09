@@ -7,15 +7,14 @@ class BufferManager:
         worker_id,
         num_buckets,
         dump_dir="./dump",
-        buffer_threshold_bytes=4 * 1024 * 1024,
+        buffer_threshold_bytes=64 * 1024 * 1024,
     ):
-        
         self.worker_id = worker_id
         self.num_buckets = num_buckets
         self.dump_dir = dump_dir
 
         self.buffer_threshold_bytes = buffer_threshold_bytes
-        self.buffer = [[] for _ in range(self.num_buckets)]        
+        self.buffer = [[] for _ in range(self.num_buckets)]          
         self.buffered_bytes = 0
         
         self._num_flushes = 0

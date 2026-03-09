@@ -6,7 +6,7 @@ from contextlib import ExitStack
 
 OUTPUT_DIR = "./output"
 DUMP_DIR = "./dump"
-MERGED_FILE_NAME = "merged-output"
+MERGED_FILE_NAME = "merged.txt"
 
 def parse_output_line(line):
     key, count = line.rstrip("\n").rsplit(" ", 1)
@@ -16,6 +16,9 @@ def iter_output_file(file_handle):
     for line in file_handle:
         if line.strip():
             yield parse_output_line(line)
+
+def open_output_file(path):
+    return open(path, "r", encoding="cp1252")
 
 def clear_directory(directory):
     if not os.path.exists(directory):
@@ -30,6 +33,7 @@ def clear_directory(directory):
             os.remove(entry_path)
 
 def merge_outputs():
+    os.makedirs("./final-output", exist_ok=True)
     reducer_files = sorted(
         os.path.join(OUTPUT_DIR, name)
         for name in os.listdir(OUTPUT_DIR)
@@ -50,17 +54,14 @@ def merge_outputs():
         with ExitStack() as stack:
             streams = []
             for reducer_file in reducer_files:
-                handle = stack.enter_context(open(reducer_file, "r", encoding="utf-8"))
+                handle = stack.enter_context(open_output_file(reducer_file))
                 streams.append(iter_output_file(handle))
 
             merged = heapq.merge(*streams, key=lambda item: item[0])
             for key, count in merged:
                 temp_output.write(f"{key} {count}\n")
 
-    clear_directory(DUMP_DIR)
-    clear_directory(OUTPUT_DIR)
-
-    final_output_path = os.path.join(OUTPUT_DIR, MERGED_FILE_NAME)
+    final_output_path = os.path.join('./final-output', MERGED_FILE_NAME)
     shutil.move(temp_output_path, final_output_path)
     return final_output_path
 

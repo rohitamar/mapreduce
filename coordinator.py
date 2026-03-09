@@ -1,6 +1,7 @@
 import asyncio 
 import grpc
 import os
+import time
 import mapreduce_pb2
 import mapreduce_pb2_grpc
 
@@ -8,7 +9,7 @@ from google.protobuf import empty_pb2
 
 DATASET_PATH = "./dataset"
 
-def chunker(chunk_size=64 * 1024):                                                                                                                                                      
+def chunker(chunk_size= 8*1024*1024):                                                                                                                                                      
     for name in os.listdir(DATASET_PATH):                                                                                                                                                                      
         file_path = os.path.join(DATASET_PATH, name)                                                                                                                                                           
         if not os.path.isfile(file_path):                                                                                                                                                                     
@@ -32,11 +33,11 @@ async def map_worker(queue, port, worker_id):
             if byte_range is None:
                 queue.task_done()
                 break 
-            start, end = byte_range
+            file_path, start, end = byte_range
             try: 
                 await stub.Map(mapreduce_pb2.MapRequest(
                     key=f"{start}:{end}",
-                    value='small.txt',
+                    value=file_path,
                     worker_id=worker_id,
                     num_workers=W
                 ))
@@ -85,6 +86,7 @@ async def produce_chunks(queue):
         await queue.put(chunk)
 
 async def main():
+    start_time = time.perf_counter()
     # mapper phase
     queue = asyncio.Queue(maxsize = 2 * W)
     workers = []
@@ -135,6 +137,9 @@ async def main():
         )
 
     await asyncio.gather(*workers)
+
+    elapsed_time = time.perf_counter() - start_time
+    print(f"MapReduce job completed in {elapsed_time:.2f} seconds")
     
 if __name__ == '__main__':
     global worker_metadata, W
