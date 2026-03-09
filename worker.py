@@ -1,4 +1,5 @@
 import asyncio
+import argparse
 import heapq
 import itertools
 import grpc 
@@ -9,51 +10,29 @@ import sys
 from google.protobuf import empty_pb2
 from contextlib import ExitStack
 from BufferManager import BufferManager
-from jobs import WordCounterJob
+from jobs import get_job
 
 class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
     
-    def __init__(self):
+    def __init__(self, job_name):
         self.buffer_manager = None
+        self.job = get_job(job_name)
         self.server = None
 
     def set_server(self, server):
         self.server = server
 
-    def trim(self, input_handle, data, byte_start, byte_end, file_size):
-        if byte_start > 0:
-            input_handle.seek(byte_start - 1)
-            prev = input_handle.read(1)
-            if prev and not prev.isspace():
-                first_ws = -1
-                for i, ch in enumerate(data):
-                    if bytes([ch]).isspace():
-                        first_ws = i
-                        break
-                data = b'' if first_ws == -1 else data[first_ws + 1:]
-
-        if byte_end < file_size and data and not bytes([data[-1]]).isspace():
-            input_handle.seek(byte_end)
-            while True:
-                ch = input_handle.read(1)
-                if not ch:
-                    break
-                data += ch
-                if ch.isspace():
-                    break
-
-        return data
-
     async def Map(self, request, context):
-        worker_id = request.worker_id
-        input_file = request.value
-        byte_start, byte_end = map(int, request.key.split(":"))
-        R = request.num_workers
+        assigned_worker_id = request.assigned_worker_id
+        input_file = request.input_path
+        byte_start = request.byte_start
+        byte_end = request.byte_end
+        num_reduce_partitions = request.num_reduce_partitions
 
         if self.buffer_manager is None:
             self.buffer_manager = BufferManager(
-                worker_id=worker_id, 
-                num_buckets=R,
+                worker_id=assigned_worker_id, 
+                num_buckets=num_reduce_partitions,
                 dump_dir="./dump",
                 buffer_threshold_bytes=192 * 1024 # 192 KB
             )
@@ -62,31 +41,22 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
             with open(input_file, 'rb') as input_handle:
                 input_handle.seek(0, os.SEEK_END)
                 file_size = input_handle.tell()
-
-                input_handle.seek(byte_start)
-                data = input_handle.read(byte_end - byte_start)
-
-                data = self.trim(
+                input_value = self.job.prepare_input(
                     input_handle=input_handle,
-                    data=data,
                     byte_start=byte_start,
                     byte_end=byte_end,
                     file_size=file_size,
                 )
 
-                data = data.decode('utf-8', errors='ignore')
                 self.buffer_manager.write_pairs(
-                    WordCounterJob.map(request.key, data)
+                    self.job.map(request.map_task_id, input_value),
+                    self.job.serialize_intermediate,
                 )
 
         except IOError as e:
             print(e)
             
         return empty_pb2.Empty()
-
-    def parse_line(self, line):
-        word, count = line.rstrip("\n").split("\t")
-        return word, int(count)
     
     async def FinalizeMap(self, request, context):
         if self.buffer_manager is None:
@@ -99,9 +69,9 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
         num_runs = self.buffer_manager.get_num_flushes
 
         for bucket in range(num_buckets):
-            final_file = f"./dump/map-{worker_id}-spill-{bucket}"
+            final_file = f"./dump/map-{worker_id}-partition-{bucket}"
             if num_runs == 1:
-                run_file = f"./dump/map-{worker_id}-spill-{bucket}-run-0"
+                run_file = f"./dump/map-{worker_id}-partition-{bucket}-run-0"
                 if os.path.exists(run_file):
                     os.replace(run_file, final_file)
                 continue
@@ -109,13 +79,13 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
             with ExitStack() as stack:
                 sorted_runs = []
                 for run_idx in range(num_runs):
-                    run_file = f"./dump/map-{worker_id}-spill-{bucket}-run-{run_idx}"
+                    run_file = f"./dump/map-{worker_id}-partition-{bucket}-run-{run_idx}"
                     if not os.path.exists(run_file):
                         continue 
 
                     handle = stack.enter_context(open(run_file, "r", encoding="utf-8"))
                     sorted_runs.append(
-                        map(self.parse_line, handle)
+                        map(self.job.deserialize_intermediate, handle)
                     )
                 
                 if not sorted_runs:
@@ -129,16 +99,16 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
         self.buffer_manager = None
         return empty_pb2.Empty()
     
-    def shuffle_and_sort(self, worker_id, worker_ids):        
+    def shuffle_and_sort(self, reduce_partition_id, mapper_worker_ids):        
         stack = ExitStack()
         reducer_files = []
-        for wid in worker_ids:
-            reducer_file_name = f"./dump/map-{wid}-spill-{worker_id}"
+        for mapper_worker_id in mapper_worker_ids:
+            reducer_file_name = f"./dump/map-{mapper_worker_id}-partition-{reduce_partition_id}"
             if not os.path.exists(reducer_file_name):
                 continue 
 
             f = stack.enter_context(open(reducer_file_name, 'r', encoding='utf-8'))
-            reducer_files.append(map(self.parse_line, f))
+            reducer_files.append(map(self.job.deserialize_intermediate, f))
         
         if not reducer_files:
             return iter(()), stack 
@@ -148,14 +118,17 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
         return grouped, stack
 
     async def Reduce(self, request, context):
-        reducer_input, stack = self.shuffle_and_sort(request.worker_id, request.worker_ids)
-        with open(f'./output/reducer-{request.worker_id}', 'w') as f:
+        reducer_input, stack = self.shuffle_and_sort(
+            request.reduce_partition_id,
+            request.mapper_worker_ids,
+        )
+        with open(f'./output/reducer-{request.reduce_partition_id}', 'w') as f:
             for key, group in reducer_input:
-                _, word_count = WordCounterJob.reduce(
+                _, reduced_value = self.job.reduce(
                     key,
-                    (count for _, count in group),
+                    (value for _, value in group),
                 )
-                f.write(f"{key} {word_count}\n")
+                f.write(self.job.format_output(key, reduced_value))
 
         stack.close()
         return empty_pb2.Empty()
@@ -165,17 +138,20 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
             asyncio.create_task(self.server.stop(0))
         return empty_pb2.Empty()
 
-async def serve(port):
+async def serve(port, job_name):
     server = grpc.aio.server()
-    servicer = MapReduceServicer()
+    servicer = MapReduceServicer(job_name)
     servicer.set_server(server)
     mapreduce_pb2_grpc.add_MapReduceServicer_to_server(servicer, server)
     server.add_insecure_port(f'[::]:{port}')
     await server.start() 
-    print(f"Server starting on {port}")
+    print(f"Server starting on {port} with job '{job_name}'")
     await server.wait_for_termination()
 
 if __name__ == '__main__':
-    port = int(sys.argv[1])
-    asyncio.run(serve(port))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("port", type=int)
+    parser.add_argument("--job", default="word_count")
+    args = parser.parse_args(sys.argv[1:])
+    asyncio.run(serve(args.port, args.job))
     

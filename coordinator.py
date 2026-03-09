@@ -10,6 +10,7 @@ from google.protobuf import empty_pb2
 DATASET_PATH = "./dataset"
 
 def chunker(chunk_size= 8*1024*1024):                                                                                                                                                      
+    map_task_id = 0
     for name in os.listdir(DATASET_PATH):                                                                                                                                                                      
         file_path = os.path.join(DATASET_PATH, name)                                                                                                                                                           
         if not os.path.isfile(file_path):                                                                                                                                                                     
@@ -20,7 +21,13 @@ def chunker(chunk_size= 8*1024*1024):
             start = 0                                                                                                                                                                                         
             while start < file_size:                                                                                                                                                                          
                 end = min(start + chunk_size, file_size)                                                                                                                                                      
-                yield (file_path, start, end)                                                                                                                                                                 
+                yield {
+                    "map_task_id": map_task_id,
+                    "input_path": file_path,
+                    "byte_start": start,
+                    "byte_end": end,
+                }
+                map_task_id += 1
                 start = end                                                                                                                                                                                   
         except Exception as e:                                                                                                                                                                                
             print(f"Error with {file_path}: {e}") 
@@ -33,13 +40,14 @@ async def map_worker(queue, port, worker_id):
             if byte_range is None:
                 queue.task_done()
                 break 
-            file_path, start, end = byte_range
             try: 
                 await stub.Map(mapreduce_pb2.MapRequest(
-                    key=f"{start}:{end}",
-                    value=file_path,
-                    worker_id=worker_id,
-                    num_workers=W
+                    map_task_id=byte_range["map_task_id"],
+                    input_path=byte_range["input_path"],
+                    byte_start=byte_range["byte_start"],
+                    byte_end=byte_range["byte_end"],
+                    assigned_worker_id=worker_id,
+                    num_reduce_partitions=NUM_REDUCE_PARTITIONS,
                 ))
             except Exception as e:
                 print(e)
@@ -54,13 +62,14 @@ async def finalize_map_worker(port):
         except Exception as e:
             print(e)
 
-async def reduce_worker(port, worker_ids, worker_id):
+async def reduce_worker(port, mapper_worker_ids, assigned_worker_id, reduce_partition_id):
     async with grpc.aio.insecure_channel(f'localhost:{port}') as channel:
         stub = mapreduce_pb2_grpc.MapReduceStub(channel)
         try:
             await stub.Reduce(mapreduce_pb2.ReduceRequest(
-                worker_ids=worker_ids,
-                worker_id=worker_id
+                mapper_worker_ids=mapper_worker_ids,
+                assigned_worker_id=assigned_worker_id,
+                reduce_partition_id=reduce_partition_id,
             ))
         except Exception as e:
             print(e)
@@ -117,14 +126,16 @@ async def main():
     await asyncio.gather(*workers)
 
     # reducer phase
-    worker_ids = [w['worker_id'] for w in worker_metadata]
+    mapper_worker_ids = [worker["worker_id"] for worker in worker_metadata]
     workers = []
-    for worker in worker_metadata:
+    for reduce_partition_id in range(NUM_REDUCE_PARTITIONS):
+        worker = worker_metadata[reduce_partition_id % W]
         workers.append(
             asyncio.create_task(reduce_worker(
                 worker['port'],
-                worker_ids,
-                worker['worker_id']
+                mapper_worker_ids,
+                worker['worker_id'],
+                reduce_partition_id,
             ))
         )
     
@@ -142,7 +153,7 @@ async def main():
     print(f"MapReduce job completed in {elapsed_time:.2f} seconds")
     
 if __name__ == '__main__':
-    global worker_metadata, W
+    global worker_metadata, W, NUM_REDUCE_PARTITIONS
 
     worker_metadata = []
     with open('metadata.txt', 'r') as f:
@@ -155,4 +166,5 @@ if __name__ == '__main__':
             })
 
     W = len(worker_metadata)
+    NUM_REDUCE_PARTITIONS = W
     asyncio.run(main())

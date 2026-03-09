@@ -10,13 +10,16 @@ service MapReduce {
 }
 
 message MapRequest {
-    string    key         = 1;  
-    string    value       = 2;   
-    int32     worker_id   = 3;
-    int32     num_workers = 4;
+    int32     map_task_id            = 1;
+    string    input_path             = 2;
+    int64     byte_start             = 3;
+    int64     byte_end               = 4;
+    int32     assigned_worker_id     = 5;
+    int32     num_reduce_partitions  = 6;
 }
 
 message ReduceRequest {
-    repeated int32 worker_ids = 1;  
-    int32 worker_id = 2; 
+    repeated int32 mapper_worker_ids = 1;
+    int32 assigned_worker_id = 2;
+    int32 reduce_partition_id = 3;
 }
