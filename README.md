@@ -8,4 +8,4 @@ Then, run `make merge`. To verify, run `make single` and `make eq`.
 
 ## Results
 
-![docker desktop results logs](https://github.com/rohitamar/mapreduce/blob/master/img/logs.png)
+![docker desktop results logs](https://github.com/rohitamar/mapreduce/blob/main/img/logs.png)
