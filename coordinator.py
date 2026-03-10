@@ -15,7 +15,6 @@ RUNTIME_DIRS = ("./dump", "./output")
 WORKER_PORT = 50051
 READINESS_TIMEOUT_SECONDS = 30
 
-
 def chunker(chunk_size=16 * 1024 * 1024):
     map_task_id = 0
     for name in sorted(os.listdir(DATASET_PATH)):
@@ -43,22 +42,10 @@ def chunker(chunk_size=16 * 1024 * 1024):
 def get_worker_target(worker):
     return f"{worker['host']}:{worker['port']}"
 
-def reset_runtime_dirs():
-    for runtime_dir in RUNTIME_DIRS:
-        os.makedirs(runtime_dir, exist_ok=True)
-        for entry in os.scandir(runtime_dir):
-            path = entry.path
-            if entry.is_dir(follow_symlinks=False):
-                shutil.rmtree(path)
-            else:
-                os.remove(path)
-
-
 async def wait_for_worker(worker):
     target = get_worker_target(worker)
     deadline = time.monotonic() + READINESS_TIMEOUT_SECONDS
     last_error = None
-
     while time.monotonic() < deadline:
         try:
             async with grpc.aio.insecure_channel(target) as channel:
@@ -67,11 +54,10 @@ async def wait_for_worker(worker):
         except Exception as e:
             last_error = e
             await asyncio.sleep(0.5)
-
     raise TimeoutError(f"Worker {target} was not ready: {last_error}")
 
 async def wait_for_workers():
-    print("Waiting for workers to become ready...")
+    print("Waiting for workers to become ready.")
     await asyncio.gather(*(wait_for_worker(worker) for worker in worker_metadata))
     print("All workers are ready.")
 
@@ -143,7 +129,6 @@ async def produce_chunks(queue):
 
 async def main():
     start_time = time.perf_counter()
-    reset_runtime_dirs()
     await wait_for_workers()
     print("Starting map phase.")
 
