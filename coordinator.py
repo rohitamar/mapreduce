@@ -130,13 +130,25 @@ async def produce_chunks(queue):
 
 async def main():
     start_time = time.perf_counter()
+    if NUM_MAP_WORKERS <= 0:
+        raise ValueError("NUM_MAP_WORKERS must be greater than 0")
+    if NUM_REDUCE_WORKERS <= 0:
+        raise ValueError("NUM_REDUCE_WORKERS must be greater than 0")
+    if NUM_MAP_WORKERS > len(worker_metadata):
+        raise ValueError("NUM_MAP_WORKERS cannot exceed the number of workers")
+    if NUM_REDUCE_WORKERS > len(worker_metadata):
+        raise ValueError("NUM_REDUCE_WORKERS cannot exceed the number of workers")
+
+    map_workers = worker_metadata[:NUM_MAP_WORKERS]
+    reduce_workers = worker_metadata[:NUM_REDUCE_WORKERS]
+
     await wait_for_workers()
     print("Starting map phase.")
 
     # mapper phase
     queue = asyncio.Queue(maxsize=2 * NUM_MAP_WORKERS)
     workers = []
-    for worker in worker_metadata:
+    for worker in map_workers:
         workers.append(
             asyncio.create_task(map_worker(
                 queue,
@@ -148,15 +160,14 @@ async def main():
     await produce_chunks(queue)
 
     # done consuming chunks, let workers know
-    for _ in range(NUM_MAP_WORKERS):
+    for _ in map_workers:
         await queue.put(None)
 
     await asyncio.gather(*workers)
     print("Map phase complete. Finalizing mapper output.")
 
     workers = []
-    # the first NUM_MAP_WORKERS are the workers for the map phase
-    for worker in worker_metadata[:NUM_MAP_WORKERS]:
+    for worker in map_workers:
         workers.append(
             asyncio.create_task(finalize_map_worker(worker))
         )
@@ -166,7 +177,7 @@ async def main():
 
     # reducer phase
     mapper_worker_ids = [
-        worker["worker_id"] for worker in worker_metadata[:NUM_MAP_WORKERS]
+        worker["worker_id"] for worker in map_workers
     ]
     workers = []
     for reduce_partition_id in range(NUM_REDUCE_WORKERS):
@@ -216,10 +227,15 @@ if __name__ == '__main__':
             "host": f"worker1",
             "port": WORKER_PORT,
             "worker_id": 1,
+        },
+        {
+            "host": f"worker2",
+            "port": WORKER_PORT,
+            "worker_id": 2,
         }
     ]
 
-    NUM_MAP_WORKERS = len(worker_metadata)
-    NUM_REDUCE_WORKERS = NUM_MAP_WORKERS
+    NUM_MAP_WORKERS = 2
+    NUM_REDUCE_WORKERS = 3
 
     asyncio.run(main())
