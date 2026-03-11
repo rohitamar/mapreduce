@@ -12,7 +12,7 @@ from google.protobuf import empty_pb2
 
 DATASET_PATH = "./dataset"
 RUNTIME_DIRS = ("./dump", "./output")
-WORKER_PORT = 50051
+WORKER_PORT = 50050
 READINESS_TIMEOUT_SECONDS = 30
 
 def chunker(chunk_size=16 * 1024 * 1024):
@@ -44,6 +44,7 @@ def get_worker_target(worker):
 
 async def wait_for_worker(worker):
     target = get_worker_target(worker)
+    print(target)
     deadline = time.monotonic() + READINESS_TIMEOUT_SECONDS
     last_error = None
     while time.monotonic() < deadline:
@@ -76,7 +77,7 @@ async def map_worker(queue, worker):
                     byte_start=byte_range["byte_start"],
                     byte_end=byte_range["byte_end"],
                     assigned_worker_id=worker["worker_id"],
-                    num_reduce_partitions=NUM_REDUCE_PARTITIONS,
+                    num_reduce_partitions=NUM_REDUCE_WORKERS,
                     job_name=JOB_NAME,
                     partitioner_name=PARTITIONER_NAME,
                 ))
@@ -133,7 +134,7 @@ async def main():
     print("Starting map phase.")
 
     # mapper phase
-    queue = asyncio.Queue(maxsize=2 * W)
+    queue = asyncio.Queue(maxsize=2 * NUM_MAP_WORKERS)
     workers = []
     for worker in worker_metadata:
         workers.append(
@@ -147,14 +148,15 @@ async def main():
     await produce_chunks(queue)
 
     # done consuming chunks, let workers know
-    for _ in range(W):
+    for _ in range(NUM_MAP_WORKERS):
         await queue.put(None)
 
     await asyncio.gather(*workers)
     print("Map phase complete. Finalizing mapper output.")
 
     workers = []
-    for worker in worker_metadata:
+    # the first NUM_MAP_WORKERS are the workers for the map phase
+    for worker in worker_metadata[:NUM_MAP_WORKERS]:
         workers.append(
             asyncio.create_task(finalize_map_worker(worker))
         )
@@ -163,10 +165,14 @@ async def main():
     print("Starting reduce phase.")
 
     # reducer phase
-    mapper_worker_ids = [worker["worker_id"] for worker in worker_metadata]
+    mapper_worker_ids = [
+        worker["worker_id"] for worker in worker_metadata[:NUM_MAP_WORKERS]
+    ]
     workers = []
-    for reduce_partition_id in range(NUM_REDUCE_PARTITIONS):
-        worker = worker_metadata[reduce_partition_id % W]
+    for reduce_partition_id in range(NUM_REDUCE_WORKERS):
+        # reduce_partition_id == worker_id
+        # But, this isn't needed for this to work
+        worker = worker_metadata[reduce_partition_id]
         workers.append(
             asyncio.create_task(reduce_worker(
                 worker,
@@ -190,29 +196,30 @@ async def main():
     print(f"MapReduce job completed in {elapsed_time:.2f} seconds")
     
 if __name__ == '__main__':
-    global JOB_NAME, PARTITIONER_NAME, worker_metadata, W, NUM_REDUCE_PARTITIONS
+    global JOB_NAME, PARTITIONER_NAME, worker_metadata, NUM_MAP_WORKERS, NUM_REDUCE_PARTITIONS
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--job", default="word_count")
     parser.add_argument("--partitioner", default="crc32")
-    parser.add_argument("--workers", type=int, default=2)
-    parser.add_argument("--worker-host-prefix", default="worker")
     args = parser.parse_args()
 
     JOB_NAME = args.job
     PARTITIONER_NAME = args.partitioner
-    if args.workers < 1:
-        raise ValueError("--workers must be at least 1")
 
     worker_metadata = [
         {
-            "host": f"{args.worker_host_prefix}{worker_id}",
+            "host": f"worker0",
             "port": WORKER_PORT,
-            "worker_id": worker_id,
+            "worker_id": 0,
+        },
+        {
+            "host": f"worker1",
+            "port": WORKER_PORT,
+            "worker_id": 1,
         }
-        for worker_id in range(args.workers)
     ]
 
-    W = len(worker_metadata)
-    NUM_REDUCE_PARTITIONS = W
+    NUM_MAP_WORKERS = len(worker_metadata)
+    NUM_REDUCE_WORKERS = NUM_MAP_WORKERS
+
     asyncio.run(main())

@@ -33,9 +33,9 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServicer):
             raise RuntimeError(
                 "Cannot change job or partitioner while a map phase is still active"
             )
-
-        self.job = JobFactory.create(job_name)
+        
         self.job_name = job_name
+        self.job = JobFactory.create(job_name)
         self.partitioner_name = partitioner_name
 
     async def Map(self, request, context):
